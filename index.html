@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SAM FOOD | سام فود</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+      html {
+        background-color: #f8fafc;
+      }
+      body {
+        font-family: 'Tajawal', sans-serif;
+        background-color: transparent;
+      }
+      body::before {
+        content: '';
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGZpbGw9IiM5MTk4YWUiIGQ9Ik0yMCAwYzExLjA0NiAwIDIwIDguOTU0IDIwIDIwcy04Ljk1NCAyMC0yMCAyMFMwIDMxLjA0NiAwIDIwIDguOTU0IDAgMjAgMHptMTMuMzgzIDEwLjk4M2ExIDEgMCAxIDEtLjkzMyAxLjc2MmwtMy40NzgtMS44NGExIDEgMCAxIDEgLjkzMy0xLjc2MmwzLjQ3OCAxLjg0ek02LjYxNyAyOS4wMTZhMSAxIDAgMCAxIC45MzMtMS43NjJsMy40NzggMS44NGExIDEgMCAxIDEgLS45MzMgMS43NjJsLTMuNDc4LTEuODR6bTQuNTg2LTguMjA0YTEgMSAwIDEgMS0xLjA0MiAxLjc0OGwtMy4yNTQtMS45NTVhMSAxIDAgMSAxIDEuMDQyLTEuNzA4bDMuMjU0IDEuOTU1em0xNy41NjMgMS4yMDNhMSAxIDAgMSAxIDEuMDQyIDEuNzA4bC0zLjI1NCAxLjk1NWExIDEgMCAxIDEtMS4wNDItMS43MDhsMy4yNTQtMS45NTV6TTguMjkgMTMuNTVhMSAxIDAgMSAxIC44MyAxLjgxNmwtMi44NzcgMS4zMTRhMSAxIDAgMSAxLS44My0xLjgxNmwzLjg3Ny0xLjMxNHptMjMuNDIgMTIuOWExIDEgMCAxIDEgLS44MyAxLjgxNmwtMi44NzctMS4zMTRhMSAxIDAgMSAxIC44My0xLjgxNmwyLjg3NyAxLjMxNHpNOC43NDggMjYuMDIyYTEgMSAwIDEgMS0xLjIyNSAxLjY0MmwtMi4zMS0xLjcyYTEgMSAwIDEgMSAxLjIyNS0xLjY0MmwyLjMxIDEuNzJ6bTIyLjUxOC0xMy4wNDVhMSAxIDAgMSAxIDEuMjI1IDEuNjQybC0yLjMxIDEuNzJhMSAxIDAgMSAxLTEuMjI1LTEuNjQybDIuMzEtMS43MnptLTIuNzY0IDE3LjQ4MmExIDEgMCAxIDEtMS42MDQuOTI2bC0xLjU0Mi0yLjY3YTEgMSAwIDEgMSAxLjYwNC0uOTI2bDEuNTQyIDIuNjZ6TTcuNDk0IDkuNTQyYTEgMSAwIDEgMSAxLjYwNC0uOTI2bDEuNTQyIDIuNjdhMSAxIDAgMSAxLTEuNjA0LjkyNmwtMS41NDItMi42N3ptMTQuODcxIDI0LjMwNWExIDEgMCAxIDEtMS43My0uNzJsLjcxMy0yLjk4M2ExIDEgMCAwIDEgMS43My43MmwtLjcxMyAyLjg4M3ptLTguOTk0LTI1Ljc5YTEgMSAwIDEgMSAxLjczLS43MmwuNzEzIDIuOTgzYTEgMSAwIDEgMS0xLjczLjcybC0uNzE0LTIuOTgzek0zMS4yIDExLjkxOGExIDEgMCAxIDEtLjk4IDEuNzQ4bC0zLjM5NC0xLjkxN2ExIDEgMCAwIDEgLjk4LTEuNzQ4bDMuMzk0IDEuOTE3ek04LjggMjguMDgyYTEgMSAwIDEgMSAuOTgtMS43NDhsMy4zOTQgMS45MTdhMSAxIDAgMSAxLS45OCAxLjc0OGwtMy4zOTQtMS45MTd6bTQuNzItOS40MTRhMSAxIDAgMSAxLTEuMDkgMS42ODVsLTMuMTgyLTEuOTk0YTEgMSAwIDEgMSAxLjA5LTEuNjg1bDMuMTgyIDEuOTk0em0xNi45NDYgMS4zN2ExIDEgMCAxIDEgMS4xIDEuNjg1bC0zLjE4NyAxLjk5NGExIDEgMCAwIDEtMS4wOS0xLjY4NWwzLjE4Ny0xLjk5NHptLTIuNzQtMTIuMDQybDEuNTQyIDIuNjZhMSAxIDAgMSAxLTEuNjA0LjkyNmwtMS41NDItMi42N2ExIDEgMCAwIDEgMS42MDQtLjkyNnptLTguNTkgMjQuODQybC0uNzE0IDIuODgzYTEgMSAwIDEgMS0xLjczLS43MmwuNzE0LTIuODgzYTEgMSAwIDEgMSAxLjczLjcyem0tOS45MDItMjMuNDNsLTIuODc3IDEuMzE0YTEgMSAwIDEgMS0uODMtMS44MTZsMi44NzctMS4zMTRhMSAxIDAgMSAxIC44MyAxLjgxNnptMjIuMjYzIDE1LjY4NWwtMi4zMSAxLjcyYTEgMSAwIDEgMS0xLjIyNS0xLjY0MmwyLjMxLTEuNzJhMSAxIDAgMSAxIDEuMjI1IDEuNjQyek02LjI4IDE2LjQ2MWExIDEgMCAxIDEgMS4yMjUtMS42NDJsMi4zMSAxLjcyYTEgMSAwIDEgMS0xLjIyNSAxLjY0MmwtMi4zMS0xLjcyem0yNy40NCA5LjU2M2ExIDEgMCAxIDEtMS4wNDIgMS43MDhsLTMuMjU0LTEuOTU1YTEgMSAwIDEgMSAxLjA0Mi0xLjcwOGwzLjI1NCAxLjk1NXoiIGZpbGwtcnVsZT0ibm9uemVybyIvPjwvZz48L3N2Zz4=');
+        opacity: 0.05;
+        z-index: -1;
+      }
+      .form-input, .form-textarea, .form-select {
+        @apply w-full px-3 py-2 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 transition;
+      }
+      .btn {
+        @apply px-4 py-2 rounded-md font-semibold text-white transition-transform transform hover:scale-105 shadow hover:shadow-lg;
+      }
+      .btn-primary {
+        @apply bg-purple-600 hover:bg-purple-700;
+      }
+      .btn-secondary {
+        @apply bg-pink-500 hover:bg-pink-600;
+      }
+      .btn-danger {
+        @apply bg-red-500 hover:bg-red-600;
+      }
+      .card {
+        @apply bg-white rounded-lg shadow-md overflow-hidden transition-shadow hover:shadow-xl;
+      }
+       @media print {
+        body * {
+          visibility: hidden;
+        }
+        .printable-area, .printable-area * {
+          visibility: visible;
+        }
+        .printable-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          margin: 0;
+          padding: 2rem;
+          border: none;
+          box-shadow: none;
+        }
+        .no-print, .no-print * {
+          display: none !important;
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
