@@ -29,6 +29,8 @@ interface HomePageProps {
   recipes: Recipe[];
   ads: Ad[];
   onViewRecipe: (recipe: Recipe) => void;
+  onEditRecipe: (recipe: Recipe) => void;
+  onDeleteRecipe: (id: string) => void;
   onDeleteAd: (id: string) => void;
   onEditAd: (ad: Ad) => void;
   onNavigate: (page: string) => void;
@@ -93,6 +95,8 @@ const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(sessionStorage.getItem('isAdmin') === 'true');
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useLocalStorage<boolean>('isSubscribed', false);
+  const [subscriptionRequest, setSubscriptionRequest] = useState<Recipe | null>(null);
 
 
   const handleLogin = (success: boolean) => {
@@ -112,14 +116,32 @@ const App = () => {
   const navigate = (page: string) => {
     window.scrollTo(0, 0);
     setPage(page);
-    setSelectedRecipe(null);
+    // BUG FIX: Do not nullify selected recipe on general navigation.
+    // setSelectedRecipe(null); 
     setEditingRecipe(null);
     setEditingAd(null);
   };
   
   const viewRecipe = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    navigate('recipeDetail');
+    if (isLoggedIn || isSubscribed) {
+        setSelectedRecipe(recipe);
+        navigate('recipeDetail');
+    } else {
+        setSubscriptionRequest(recipe); // Open subscription modal
+    }
+  };
+
+  const handleSubscriptionConfirm = () => {
+      if (subscriptionRequest) {
+          // First, set the recipe that will be needed on the next page
+          setSelectedRecipe(subscriptionRequest);
+          // Mark as subscribed for future clicks
+          setIsSubscribed(true);
+          // Navigate to the detail page
+          navigate('recipeDetail');
+          // Finally, clean up state related to the modal
+          setSubscriptionRequest(null);
+      }
   };
 
   const editRecipe = (recipe: Recipe) => {
@@ -206,7 +228,7 @@ ${recipe.steps}
      const renderPage = () => {
         switch(page) {
           case 'recipeDetail':
-            return <RecipeDetail recipe={selectedRecipe!} onEdit={editRecipe} onDelete={deleteRecipe} onDownload={downloadRecipe} isLoggedIn={isLoggedIn} />;
+            return selectedRecipe ? <RecipeDetail recipe={selectedRecipe} onEdit={editRecipe} onDelete={deleteRecipe} onDownload={downloadRecipe} isLoggedIn={isLoggedIn} /> : <p>لم يتم تحديد وصفة.</p>;
           case 'recipeForm':
             return isLoggedIn ? <RecipeForm onSave={handleRecipeSave} existingRecipe={editingRecipe} /> : <LoginPage onLogin={handleLogin} onGuest={() => navigate('home')} adminCredentials={adminCredentials} />;
           case 'adForm':
@@ -228,10 +250,10 @@ ${recipe.steps}
           case 'about':
             return <AboutPage content={aboutContent}/>;
           case 'login':
-             return isLoggedIn ? <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} /> : <LoginPage onLogin={handleLogin} onGuest={() => navigate('home')} adminCredentials={adminCredentials} />;
+             return isLoggedIn ? <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onEditRecipe={editRecipe} onDeleteRecipe={deleteRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} /> : <LoginPage onLogin={handleLogin} onGuest={() => navigate('home')} adminCredentials={adminCredentials} />;
           case 'home':
           default:
-            return <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />;
+            return <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onEditRecipe={editRecipe} onDeleteRecipe={deleteRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />;
         }
       };
 
@@ -243,12 +265,46 @@ ${recipe.steps}
           </main>
           <Footer onOpenUpdateModal={() => setIsUpdateModalOpen(true)} />
           <UpdateModal isOpen={isUpdateModalOpen} onClose={() => setIsUpdateModalOpen(false)} onImport={handleImport} />
+          {subscriptionRequest && (
+            <SubscriptionModal 
+                onConfirm={handleSubscriptionConfirm}
+                onClose={() => setSubscriptionRequest(null)}
+            />
+          )}
         </div>
       );
   }
 
   return renderContent();
 };
+
+const SubscriptionModal = ({ onConfirm, onClose }: { onConfirm: () => void, onClose: () => void }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-lg space-y-6 relative text-center">
+            <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
+            <h2 className="text-2xl font-bold text-gray-700">محتوى خاص بالمشتركين</h2>
+            <p className="text-lg text-gray-600">
+                لعرض هذه الوصفة، يرجى الاشتراك في قناتنا على يوتيوب أولاً لدعمنا وتقدير مجهودنا.
+            </p>
+            <div className="my-6">
+                <a 
+                    href="https://youtube.com/@jana_kids2020?si=lwYG1fnb8p151io2" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="btn btn-danger w-full py-3 text-lg inline-flex items-center justify-center gap-2"
+                    style={{backgroundColor: '#FF0000'}}
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10,15l6-3.5L10,8V15z M21.9,8.4c-0.3-1.1-1.2-2-2.3-2.3C18.1,5.8,12,5.8,12,5.8s-6.1,0-7.6,0.3C3.3,6.4,2.4,7.3,2.1,8.4 C1.8,9.9,1.8,12,1.8,12s0,2.1,0.3,3.6c0.3,1.1,1.2,2,2.3,2.3C6,18.2,12,18.2,12,18.2s6.1,0,7.6-0.3c1.1-0.3,2-1.2,2.3-2.3 C22.2,14.1,22.2,12,22.2,12S22.2,9.9,21.9,8.4z"></path>
+                    </svg>
+                    <span>الاشتراك في القناة</span>
+                </a>
+            </div>
+            <p className="text-sm text-gray-500">بعد الاشتراك، يمكنك العودة والمتابعة.</p>
+            <button onClick={onConfirm} className="btn btn-primary w-full py-3">لقد اشتركت، متابعة للوصفة</button>
+        </div>
+    </div>
+);
 
 const DefaultLogo = () => (
     <div className="flex items-center gap-2">
@@ -314,7 +370,7 @@ const Footer = ({ onOpenUpdateModal }: { onOpenUpdateModal: () => void }) => (
     </footer>
 );
 
-const HomePage = ({ recipes, ads, onViewRecipe, onDeleteAd, onEditAd, onNavigate, isLoggedIn, searchQuery, setSearchQuery }: HomePageProps) => {
+const HomePage = ({ recipes, ads, onViewRecipe, onEditRecipe, onDeleteRecipe, onDeleteAd, onEditAd, onNavigate, isLoggedIn, searchQuery }: HomePageProps) => {
     const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
     
     const filteredRecipes = useMemo(() => {
@@ -343,7 +399,14 @@ const HomePage = ({ recipes, ads, onViewRecipe, onDeleteAd, onEditAd, onNavigate
             {filteredRecipes.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredRecipes.map(recipe => (
-                        <RecipeCard key={recipe.id} recipe={recipe} onView={onViewRecipe} />
+                        <RecipeCard 
+                          key={recipe.id} 
+                          recipe={recipe} 
+                          onView={onViewRecipe} 
+                          onEdit={onEditRecipe} 
+                          onDelete={onDeleteRecipe} 
+                          isLoggedIn={isLoggedIn}
+                        />
                     ))}
                 </div>
             ) : (
@@ -374,18 +437,31 @@ const HomePage = ({ recipes, ads, onViewRecipe, onDeleteAd, onEditAd, onNavigate
     );
 }
 
-// Fix: Changed component to be of type React.FC to correctly handle the 'key' prop.
-const RecipeCard: React.FC<{ recipe: Recipe, onView: (recipe: Recipe) => void }> = ({ recipe, onView }) => (
-    <div className="card cursor-pointer" onClick={() => onView(recipe)}>
+const RecipeCard: React.FC<{
+  recipe: Recipe,
+  onView: (recipe: Recipe) => void,
+  onEdit: (recipe: Recipe) => void,
+  onDelete: (id: string) => void,
+  isLoggedIn: boolean
+}> = ({ recipe, onView, onEdit, onDelete, isLoggedIn }) => (
+    <div className="card flex flex-col justify-between">
+      <div className="cursor-pointer" onClick={() => onView(recipe)}>
         <img src={recipe.image} alt={recipe.name} className="w-full h-48 object-cover" />
         <div className="p-4">
-            <span className="inline-block bg-purple-100 text-purple-700 text-xs font-semibold px-2 py-1 rounded-full mb-2">{recipe.category}</span>
-            <h3 className="text-lg font-bold hover:text-purple-600">{recipe.name}</h3>
+          <span className="inline-block bg-purple-100 text-purple-700 text-xs font-semibold px-2 py-1 rounded-full mb-2">{recipe.category}</span>
+          <h3 className="text-lg font-bold hover:text-purple-600">{recipe.name}</h3>
         </div>
+      </div>
+      {isLoggedIn && (
+        <div className="p-4 pt-2 flex justify-end gap-4 border-t mt-auto">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(recipe); }} className="text-sm font-medium text-blue-600 hover:underline">تعديل</button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(recipe.id); }} className="text-sm font-medium text-red-600 hover:underline">حذف</button>
+        </div>
+      )}
     </div>
 );
 
-// Fix: Changed component to be of type React.FC to correctly handle the 'key' prop.
+
 const AdCard: React.FC<{ ad: Ad, onDelete: (id: string) => void, onEdit: (ad: Ad) => void, isLoggedIn: boolean }> = ({ ad, onDelete, onEdit, isLoggedIn }) => (
     <div className="card p-4 flex flex-col items-center text-center">
         <img src={ad.image} alt={ad.title} className="w-full h-40 object-cover rounded-md mb-4" />
@@ -789,90 +865,80 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
   
         <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
             <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة الشعار</h2>
-            <div className="md:flex md:items-center md:gap-8">
-                <div className="mb-4 md:mb-0">
-                  <p className="font-medium mb-2">الشعار الحالي:</p>
-                  <div className="w-40 h-20 flex items-center justify-center bg-gray-100 p-2 rounded-md border">
-                    {currentLogo ? <img src={currentLogo} alt="Site Logo" className="max-h-full max-w-full object-contain"/> : <DefaultLogo />}
-                  </div>
-                </div>
-                <div className="flex-grow">
-                  <p className="text-gray-600 mb-4">
-                    اختر شعاراً جديداً للموقع. يفضل أن تكون الصورة بصيغة PNG أو SVG بخلفية شفافة.
-                  </p>
-                  <div className="flex flex-wrap gap-4">
-                     <label className="btn btn-primary cursor-pointer">
-                      <span>تغيير الشعار</span>
-                      <input type="file" className="hidden" accept="image/*" onChange={handleLogoChange} />
-                    </label>
-                    <button onClick={handleLogoReset} className="btn btn-danger">إعادة الشعار الافتراضي</button>
-                  </div>
-                </div>
+            <div className="flex items-center gap-4">
+              <span className="font-medium">الشعار الحالي:</span>
+              <Logo logo={currentLogo} />
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <label className="btn btn-primary cursor-pointer">
+                <span>تغيير الشعار</span>
+                <input type="file" className="hidden" accept="image/*" onChange={handleLogoChange} />
+              </label>
+              <button onClick={handleLogoReset} className="btn btn-secondary">إعادة الشعار للافتراضي</button>
             </div>
         </div>
 
         <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة معلومات الدخول</h2>
+            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تعديل محتوى "عن الموقع"</h2>
+            <textarea 
+                value={editableAbout} 
+                onChange={e => setEditableAbout(e.target.value)}
+                rows={8}
+                className="form-textarea"
+            ></textarea>
+            <button onClick={handleAboutSave} className="btn btn-primary">حفظ محتوى "عن الموقع"</button>
+        </div>
+        
+        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
+            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة مفتاح التحديث</h2>
+             <p className="text-gray-600">
+               هذا هو المفتاح الذي يجب على الزوار إدخاله لتحديث المحتوى. قم بتغييره عند الحاجة وشاركه معهم.
+             </p>
+            <input 
+                type="text" 
+                value={editableUpdateKey} 
+                onChange={e => setEditableUpdateKey(e.target.value)}
+                className="form-input"
+            />
+            <button onClick={handleUpdateKeySave} className="btn btn-primary">حفظ مفتاح التحديث</button>
+        </div>
+
+        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
+            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تغيير معلومات الدخول</h2>
             <form onSubmit={handleCredentialsSave} className="space-y-4">
-                <div>
-                    <label className="block font-medium mb-1">اسم المستخدم الجديد</label>
-                    <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="form-input" required />
-                </div>
-                <div>
-                    <label className="block font-medium mb-1">كلمة المرور الجديدة</label>
-                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="form-input" required placeholder="اتركها فارغة لعدم التغيير" />
-                </div>
-                <div>
-                    <label className="block font-medium mb-1">تأكيد كلمة المرور الجديدة</label>
-                    <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="form-input" required />
-                </div>
-                <button type="submit" className="btn btn-primary">حفظ معلومات الدخول</button>
+              <div>
+                  <label className="block font-medium mb-1">اسم المستخدم الجديد</label>
+                  <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="form-input" />
+              </div>
+              <div>
+                  <label className="block font-medium mb-1">كلمة المرور الجديدة</label>
+                  <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="form-input" />
+              </div>
+              <div>
+                  <label className="block font-medium mb-1">تأكيد كلمة المرور الجديدة</label>
+                  <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="form-input" />
+              </div>
+              <button type="submit" className="btn btn-primary">حفظ معلومات الدخول</button>
             </form>
-        </div>
-
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">مفتاح تحديث الزوار</h2>
-            <p className="text-gray-600">
-                هذا هو المفتاح الذي سيستخدمه الزوار لتحديث محتوى الموقع لديهم. قم بتعيين مفتاح وشاركه معهم بالإضافة إلى ملف التصدير.
-            </p>
-            <div className="flex items-end gap-4">
-                <div className="flex-grow">
-                    <label className="block font-medium mb-1">مفتاح التحديث</label>
-                    <input type="text" value={editableUpdateKey} onChange={e => setEditableUpdateKey(e.target.value)} className="form-input" required />
-                </div>
-                <button onClick={handleUpdateKeySave} className="btn btn-primary">حفظ المفتاح</button>
-            </div>
-        </div>
-
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تعديل صفحة "عن الموقع"</h2>
-            <div>
-                <label className="block font-medium mb-1">محتوى الصفحة</label>
-                <textarea value={editableAbout} onChange={e => setEditableAbout(e.target.value)} rows={8} className="form-textarea"></textarea>
-            </div>
-            <button onClick={handleAboutSave} className="btn btn-primary">حفظ محتوى الصفحة</button>
         </div>
       </div>
     );
 };
-  
+
 const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: () => void, onImport: (data: any) => void }) => {
+    const [file, setFile] = useState<File | null>(null);
+
     if (!isOpen) return null;
 
-    const [file, setFile] = useState<File | null>(null);
-    const [key, setKey] = useState('');
-    const [error, setError] = useState('');
-
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        if (event.target.files && event.target.files[0]) {
-            setFile(event.target.files[0]);
-            setError('');
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            setFile(e.target.files[0]);
         }
     };
-
-    const handleSubmit = () => {
-        if (!file || !key.trim()) {
-            setError('يرجى اختيار ملف وإدخال مفتاح التحديث.');
+    
+    const handleUpdate = () => {
+        if (!file) {
+            alert("يرجى اختيار ملف التحديث أولاً.");
             return;
         }
 
@@ -883,49 +949,36 @@ const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: 
                 if (typeof text !== 'string') throw new Error("الملف غير قابل للقراءة");
                 const data = JSON.parse(text);
 
-                if (data.updateKey && data.updateKey === key) {
-                    if (window.confirm("هل أنت متأكد من استيراد البيانات؟ هذا سيؤدي إلى الكتابة فوق جميع البيانات الحالية لديك.")) {
-                        onImport(data);
-                        onClose();
-                    }
-                } else {
-                    setError('مفتاح التحديث غير صحيح أو أن الملف تالف.');
+                if (window.confirm("سيتم تحديث المحتوى. هل أنت متأكد؟")) {
+                    onImport(data);
+                    onClose(); // Close modal on success
                 }
-            } catch (err) {
-                setError(`فشل استيراد البيانات: ${err.message}`);
+            } catch (error) {
+                console.error("فشل في تحديث المحتوى:", error);
+                alert(`فشل في تحديث المحتوى: ${error.message}`);
             }
         };
         reader.readAsText(file);
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-lg space-y-6 relative">
-                <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 hover:text-gray-800">&times;</button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-md space-y-4 relative">
+                 <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
                 <h2 className="text-2xl font-bold text-center text-gray-700">تحديث محتوى الموقع</h2>
                 <p className="text-center text-gray-600">
-                    لاستيراد آخر الوصفات، يرجى رفع ملف البيانات (`.json`) وإدخال مفتاح التحديث الذي حصلت عليه من مدير الموقع.
+                    للحصول على آخر الوصفات والإعلانات، يرجى رفع ملف التحديث الذي حصلت عليه من مدير الموقع.
                 </p>
-                {error && <p className="text-red-500 text-center bg-red-100 p-3 rounded-md">{error}</p>}
-                <div className="space-y-4">
-                    <div>
-                        <label className="block font-medium mb-1">ملف البيانات (.json)</label>
-                        <input type="file" accept=".json" onChange={handleFileChange} className="form-input" />
-                    </div>
-                    <div>
-                        <label className="block font-medium mb-1">مفتاح التحديث</label>
-                        <input type="text" value={key} onChange={e => setKey(e.target.value)} className="form-input" placeholder="أدخل المفتاح هنا" />
-                    </div>
+                <div>
+                    <label className="block font-medium mb-2">اختر ملف التحديث (JSON):</label>
+                    <input type="file" accept=".json" onChange={handleFileChange} className="form-input" />
                 </div>
-                <div className="flex gap-4">
-                    <button onClick={handleSubmit} className="btn btn-primary w-full py-3">تحديث الآن</button>
-                    <button onClick={onClose} className="btn bg-gray-600 hover:bg-gray-700 w-full py-3">إلغاء</button>
-                </div>
+                <button onClick={handleUpdate} className="btn btn-primary w-full py-3">تحديث الآن</button>
             </div>
         </div>
     );
-};
+}
 
-const container = document.getElementById('root');
-const root = createRoot(container!);
+
+const root = createRoot(document.getElementById('root')!);
 root.render(<App />);
