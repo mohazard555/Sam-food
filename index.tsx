@@ -81,6 +81,8 @@ const App = () => {
   const [logo, setLogo] = useLocalStorage<string | null>('siteLogo', null);
   const [adminCredentials, setAdminCredentials] = useLocalStorage<AdminCredentials>('adminCredentials', { username: 'admin', password: '12345' });
   const [updateKey, setUpdateKey] = useLocalStorage<string>('updateKey', 'DEFAULT_KEY');
+  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', '');
+  const [lastUpdateKey, setLastUpdateKey] = useLocalStorage<string | null>('lastUpdateKey', null);
   const [aboutContent, setAboutContent] = useLocalStorage<string>(
     'aboutContent',
     `مرحبًا بك في SAM FOOD، منصتك المثالية لمشاركة وحفظ وصفات الطبخ المفضلة لديك بسهولة وأناقة.
@@ -97,6 +99,33 @@ const App = () => {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [isSubscribed, setIsSubscribed] = useLocalStorage<boolean>('isSubscribed', false);
   const [subscriptionRequest, setSubscriptionRequest] = useState<Recipe | null>(null);
+
+  useEffect(() => {
+    const checkForUpdates = async () => {
+        if (isLoggedIn || !updateUrl) {
+            return; // Don't auto-update for admin or if URL is not set
+        }
+        try {
+            const response = await fetch(updateUrl);
+            if (!response.ok) {
+                console.warn(`Auto-update failed: Could not fetch from ${updateUrl}`);
+                return;
+            }
+            const data = await response.json();
+            
+            if (data && data.updateKey && data.updateKey !== lastUpdateKey) {
+                console.log('New update found, applying...');
+                handleImport(data, {isAutomatic: true});
+                setLastUpdateKey(data.updateKey);
+            }
+        } catch (error) {
+            console.error('Error during auto-update check:', error);
+        }
+    };
+
+    const timer = setTimeout(checkForUpdates, 2000); // Check after 2 seconds
+    return () => clearTimeout(timer);
+}, [isLoggedIn, updateUrl, lastUpdateKey]);
 
 
   const handleLogin = (success: boolean) => {
@@ -145,13 +174,13 @@ const App = () => {
   };
 
   const editRecipe = (recipe: Recipe) => {
-    setEditingRecipe(recipe);
     navigate('recipeForm');
+    setEditingRecipe(recipe);
   }
   
   const editAd = (ad: Ad) => {
-    setEditingAd(ad);
     navigate('adForm');
+    setEditingAd(ad);
   }
 
   const handleRecipeSave = (recipe: Recipe) => {
@@ -209,15 +238,31 @@ ${recipe.steps}
       URL.revokeObjectURL(url);
   };
   
-  const handleImport = (data: any) => {
-      setRecipes(data.recipes || []);
-      setAds(data.ads || []);
-      if (data.logo) setLogo(data.logo);
-      if (data.aboutContent) setAboutContent(data.aboutContent);
-      if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
-      if (data.updateKey) setUpdateKey(data.updateKey);
-      alert('تم استيراد البيانات بنجاح!');
-      navigate('home');
+  const handleImport = (data: any, options: {isAutomatic: boolean} = {isAutomatic: false}) => {
+      const performImport = () => {
+          const newRecipes = data.recipes || [];
+          setRecipes(newRecipes);
+          setAds(data.ads || []);
+          if (data.logo) setLogo(data.logo);
+          if (data.aboutContent) setAboutContent(data.aboutContent);
+          if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
+          if (data.updateKey) setUpdateKey(data.updateKey);
+          if (data.updateUrl) setUpdateUrl(data.updateUrl);
+          
+          if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
+              setSelectedRecipe(null);
+              if (!options.isAutomatic) navigate('home');
+          }
+
+          if (!options.isAutomatic) {
+              alert('تم استيراد البيانات بنجاح!');
+              navigate('home');
+          }
+      };
+      
+      if (options.isAutomatic || window.confirm("هل أنت متأكد من استيراد البيانات؟ هذا سيؤدي إلى الكتابة فوق جميع البيانات الحالية.")) {
+          performImport();
+      }
   };
 
   const renderContent = () => {
@@ -246,6 +291,8 @@ ${recipe.steps}
                 onAboutContentChange={setAboutContent}
                 updateKey={updateKey}
                 onUpdateKeyChange={setUpdateKey}
+                updateUrl={updateUrl}
+                onUpdateUrlChange={setUpdateUrl}
                  /> : <LoginPage onLogin={handleLogin} onGuest={() => navigate('home')} adminCredentials={adminCredentials} />;
           case 'about':
             return <AboutPage content={aboutContent}/>;
@@ -359,7 +406,7 @@ const Footer = ({ onOpenUpdateModal }: { onOpenUpdateModal: () => void }) => (
       <div className="container mx-auto">
           <div className="mb-4">
               <a onClick={onOpenUpdateModal} className="cursor-pointer text-purple-300 hover:text-purple-200 hover:underline">
-                  تحديث المحتوى
+                  تحديث المحتوى يدوياً
               </a>
           </div>
           <p>&copy; {new Date().getFullYear()} SAM FOOD. كل الحقوق محفوظة.</p>
@@ -734,15 +781,18 @@ interface AdminPageProps {
     onAboutContentChange: (content: string) => void;
     updateKey: string;
     onUpdateKeyChange: (key: string) => void;
+    updateUrl: string;
+    onUpdateUrlChange: (url: string) => void;
 }
 
-const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCredentials, onCredentialsChange, aboutContent, onAboutContentChange, updateKey, onUpdateKeyChange }: AdminPageProps) => {
+const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCredentials, onCredentialsChange, aboutContent, onAboutContentChange, updateKey, onUpdateKeyChange, updateUrl, onUpdateUrlChange }: AdminPageProps) => {
 
     const [newUsername, setNewUsername] = useState(adminCredentials.username);
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [editableAbout, setEditableAbout] = useState(aboutContent);
     const [editableUpdateKey, setEditableUpdateKey] = useState(updateKey);
+    const [editableUpdateUrl, setEditableUpdateUrl] = useState(updateUrl);
 
     const handleCredentialsSave = (e: React.FormEvent) => {
         e.preventDefault();
@@ -780,6 +830,12 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
         }
     };
 
+    const handleUpdateUrlSave = () => {
+        if (window.confirm("هل أنت متأكد من حفظ رابط التحديث الجديد؟")) {
+            onUpdateUrlChange(editableUpdateUrl);
+            alert("تم حفظ رابط التحديث بنجاح.");
+        }
+    };
 
     const handleExport = () => {
         const dataToExport = {
@@ -789,6 +845,7 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
             adminCredentials,
             aboutContent,
             updateKey,
+            updateUrl,
         };
         const jsonString = JSON.stringify(dataToExport, null, 2);
         const blob = new Blob([jsonString], { type: 'application/json' });
@@ -802,7 +859,7 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
         URL.revokeObjectURL(url);
     };
 
-    const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
@@ -812,10 +869,7 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
                 const text = e.target?.result;
                 if (typeof text !== 'string') throw new Error("File is not readable");
                 const data = JSON.parse(text);
-
-                if (window.confirm("هل أنت متأكد من استيراد البيانات؟ هذا سيؤدي إلى الكتابة فوق جميع البيانات الحالية.")) {
-                    onImport(data);
-                }
+                onImport(data);
             } catch (error) {
                 console.error("Failed to import data:", error);
                 alert(`فشل استيراد البيانات: ${error.message}`);
@@ -858,7 +912,7 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
               <button onClick={handleExport} className="btn btn-primary">تصدير البيانات</button>
               <label className="btn btn-secondary cursor-pointer">
                 <span>استيراد البيانات (للمدير)</span>
-                <input type="file" className="hidden" accept=".json" onChange={handleImport} />
+                <input type="file" className="hidden" accept=".json" onChange={handleImportFile} />
               </label>
             </div>
         </div>
@@ -877,6 +931,42 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
               <button onClick={handleLogoReset} className="btn btn-secondary">إعادة الشعار للافتراضي</button>
             </div>
         </div>
+        
+        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
+            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة التحديث التلقائي للزوار</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block font-medium mb-1">رابط ملف التحديث (URL)</label>
+                <p className="text-gray-600 text-sm mb-2">
+                  ضع هنا رابط ملف JSON الذي قمت بتصديره. سيستخدمه الزوار للحصول على التحديثات تلقائيًا عند فتح الموقع.
+                  <br/>
+                  <strong>ملاحظة:</strong> يجب أن يكون الرابط متاحًا للعموم ويدعم CORS (مثل رابط raw من GitHub Gist).
+                </p>
+                <input 
+                    type="url" 
+                    value={editableUpdateUrl} 
+                    onChange={e => setEditableUpdateUrl(e.target.value)}
+                    className="form-input"
+                    placeholder="https://example.com/data.json"
+                />
+                <button onClick={handleUpdateUrlSave} className="btn btn-primary mt-2">حفظ رابط التحديث</button>
+              </div>
+              <hr/>
+              <div>
+                <label className="block font-medium mb-1">مفتاح التحديث</label>
+                 <p className="text-gray-600 text-sm mb-2">
+                   هذا المفتاح يستخدم للتحقق من وجود تحديث جديد. قم بتغييره في كل مرة تصدر فيها تحديثًا جديدًا للمحتوى.
+                 </p>
+                <input 
+                    type="text" 
+                    value={editableUpdateKey} 
+                    onChange={e => setEditableUpdateKey(e.target.value)}
+                    className="form-input"
+                />
+                <button onClick={handleUpdateKeySave} className="btn btn-primary mt-2">حفظ مفتاح التحديث</button>
+              </div>
+            </div>
+        </div>
 
         <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
             <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تعديل محتوى "عن الموقع"</h2>
@@ -889,20 +979,6 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
             <button onClick={handleAboutSave} className="btn btn-primary">حفظ محتوى "عن الموقع"</button>
         </div>
         
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة مفتاح التحديث</h2>
-             <p className="text-gray-600">
-               هذا هو المفتاح الذي يجب على الزوار إدخاله لتحديث المحتوى. قم بتغييره عند الحاجة وشاركه معهم.
-             </p>
-            <input 
-                type="text" 
-                value={editableUpdateKey} 
-                onChange={e => setEditableUpdateKey(e.target.value)}
-                className="form-input"
-            />
-            <button onClick={handleUpdateKeySave} className="btn btn-primary">حفظ مفتاح التحديث</button>
-        </div>
-
         <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
             <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تغيير معلومات الدخول</h2>
             <form onSubmit={handleCredentialsSave} className="space-y-4">
@@ -948,11 +1024,8 @@ const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: 
                 const text = e.target?.result;
                 if (typeof text !== 'string') throw new Error("الملف غير قابل للقراءة");
                 const data = JSON.parse(text);
-
-                if (window.confirm("سيتم تحديث المحتوى. هل أنت متأكد؟")) {
-                    onImport(data);
-                    onClose(); // Close modal on success
-                }
+                onImport(data);
+                onClose(); // Close modal on success
             } catch (error) {
                 console.error("فشل في تحديث المحتوى:", error);
                 alert(`فشل في تحديث المحتوى: ${error.message}`);
@@ -965,9 +1038,9 @@ const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: 
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-md space-y-4 relative">
                  <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
-                <h2 className="text-2xl font-bold text-center text-gray-700">تحديث محتوى الموقع</h2>
+                <h2 className="text-2xl font-bold text-center text-gray-700">تحديث المحتوى يدوياً</h2>
                 <p className="text-center text-gray-600">
-                    للحصول على آخر الوصفات والإعلانات، يرجى رفع ملف التحديث الذي حصلت عليه من مدير الموقع.
+                    في حال لم يعمل التحديث التلقائي، يمكنك رفع ملف التحديث الذي حصلت عليه من مدير الموقع.
                 </p>
                 <div>
                     <label className="block font-medium mb-2">اختر ملف التحديث (JSON):</label>
