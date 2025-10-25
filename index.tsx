@@ -132,23 +132,28 @@ const App = () => {
             
             if (data && data.updateKey && (lastUpdateKey === null || data.updateKey !== lastUpdateKey)) {
                 console.log('تطبيق تحديث جديد أو بيانات أولية...');
-                const newRecipes = data.recipes || [];
-                setRecipes(newRecipes);
-                setAds(data.ads || []);
-                if (data.logo) setLogo(data.logo);
-                if (data.aboutContent) setAboutContent(data.aboutContent);
                 
-                if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
-                    setSelectedRecipe(null);
+                if (Array.isArray(data.recipes)) {
+                    const newRecipes = data.recipes;
+                    setRecipes(newRecipes);
+                    if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
+                        setSelectedRecipe(null);
+                    }
+                }
+                if (Array.isArray(data.ads)) {
+                    setAds(data.ads);
+                }
+                if (typeof data.logo !== 'undefined') {
+                    setLogo(data.logo);
+                }
+                if (typeof data.aboutContent !== 'undefined') {
+                    setAboutContent(data.aboutContent);
                 }
                 
                 setLastUpdateKey(data.updateKey);
             }
         } catch (error) {
             console.error('Error during data fetch:', error);
-            // If the update fails, we'll just use the cached data.
-            // Don't show a blocking error screen, especially for first-time users
-            // who won't have any cached data. The app should still be usable.
             console.warn('Failed to fetch updates, using cached data.');
         } finally {
             setIsLoading(false);
@@ -265,11 +270,20 @@ ${recipe.steps}
   
   const handleImport = (data: any, options: { isPrivileged: boolean } = { isPrivileged: false }) => {
       const performImport = () => {
-          const newRecipes = data.recipes || [];
-          setRecipes(newRecipes);
-          setAds(data.ads || []);
-          if (data.logo) setLogo(data.logo);
-          if (data.aboutContent) setAboutContent(data.aboutContent);
+          let recipesWereUpdated = false;
+          if (Array.isArray(data.recipes)) {
+              setRecipes(data.recipes);
+              recipesWereUpdated = true;
+          }
+          if (Array.isArray(data.ads)) {
+              setAds(data.ads);
+          }
+          if (typeof data.logo !== 'undefined') {
+              setLogo(data.logo);
+          }
+          if (typeof data.aboutContent !== 'undefined') {
+              setAboutContent(data.aboutContent);
+          }
 
           if (options.isPrivileged) {
               if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
@@ -277,9 +291,8 @@ ${recipe.steps}
               if (data.updateUrl) setUpdateUrl(data.updateUrl);
           }
           
-          if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
+          if (recipesWereUpdated && selectedRecipe && !data.recipes.some(r => r.id === selectedRecipe.id)) {
               setSelectedRecipe(null);
-              if (options.isPrivileged) navigate('home');
           }
 
           alert('تم استيراد البيانات بنجاح!');
