@@ -106,7 +106,11 @@ const App = () => {
             return; // Don't auto-update for admin or if URL is not set
         }
         try {
-            const response = await fetch(updateUrl);
+            // Add cache-busting parameter to the fetch URL
+            const url = new URL(updateUrl);
+            url.searchParams.append('_t', new Date().getTime().toString());
+            
+            const response = await fetch(url.toString());
             if (!response.ok) {
                 console.warn(`Auto-update failed: Could not fetch from ${updateUrl}`);
                 return;
@@ -115,7 +119,16 @@ const App = () => {
             
             if (data && data.updateKey && data.updateKey !== lastUpdateKey) {
                 console.log('New update found, applying...');
-                handleImport(data, {isAutomatic: true});
+                const newRecipes = data.recipes || [];
+                setRecipes(newRecipes);
+                setAds(data.ads || []);
+                if (data.logo) setLogo(data.logo);
+                if (data.aboutContent) setAboutContent(data.aboutContent);
+                
+                if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
+                    setSelectedRecipe(null);
+                }
+                
                 setLastUpdateKey(data.updateKey);
             }
         } catch (error) {
@@ -238,29 +251,33 @@ ${recipe.steps}
       URL.revokeObjectURL(url);
   };
   
-  const handleImport = (data: any, options: {isAutomatic: boolean} = {isAutomatic: false}) => {
+  const handleImport = (data: any, options: { isPrivileged: boolean } = { isPrivileged: false }) => {
       const performImport = () => {
           const newRecipes = data.recipes || [];
           setRecipes(newRecipes);
           setAds(data.ads || []);
           if (data.logo) setLogo(data.logo);
           if (data.aboutContent) setAboutContent(data.aboutContent);
-          if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
-          if (data.updateKey) setUpdateKey(data.updateKey);
-          if (data.updateUrl) setUpdateUrl(data.updateUrl);
+
+          // Only privileged (admin) imports can change sensitive settings
+          if (options.isPrivileged) {
+              if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
+              if (data.updateKey) setUpdateKey(data.updateKey);
+              if (data.updateUrl) setUpdateUrl(data.updateUrl);
+          }
           
           if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
               setSelectedRecipe(null);
-              if (!options.isAutomatic) navigate('home');
+              if (options.isPrivileged) navigate('home');
           }
 
-          if (!options.isAutomatic) {
-              alert('تم استيراد البيانات بنجاح!');
+          alert('تم استيراد البيانات بنجاح!');
+          if (options.isPrivileged) {
               navigate('home');
           }
       };
       
-      if (options.isAutomatic || window.confirm("هل أنت متأكد من استيراد البيانات؟ هذا سيؤدي إلى الكتابة فوق جميع البيانات الحالية.")) {
+      if (window.confirm("هل أنت متأكد من استيراد البيانات؟ هذا سيؤدي إلى الكتابة فوق جميع البيانات الحالية.")) {
           performImport();
       }
   };
@@ -772,7 +789,7 @@ const LoginPage = ({ onLogin, onGuest, adminCredentials }: { onLogin: (success: 
 interface AdminPageProps {
     recipes: Recipe[];
     ads: Ad[];
-    onImport: (data: any) => void;
+    onImport: (data: any, options: { isPrivileged: boolean }) => void;
     onLogoChange: (logo: string | null) => void;
     currentLogo: string | null;
     adminCredentials: AdminCredentials;
@@ -869,7 +886,7 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
                 const text = e.target?.result;
                 if (typeof text !== 'string') throw new Error("File is not readable");
                 const data = JSON.parse(text);
-                onImport(data);
+                onImport(data, { isPrivileged: true });
             } catch (error) {
                 console.error("Failed to import data:", error);
                 alert(`فشل استيراد البيانات: ${error.message}`);
@@ -940,14 +957,14 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
                 <p className="text-gray-600 text-sm mb-2">
                   ضع هنا رابط ملف JSON الذي قمت بتصديره. سيستخدمه الزوار للحصول على التحديثات تلقائيًا عند فتح الموقع.
                   <br/>
-                  <strong>ملاحظة:</strong> يجب أن يكون الرابط متاحًا للعموم ويدعم CORS (مثل رابط raw من GitHub Gist).
+                  <strong>ملاحظة:</strong> استخدم رابط النسخة الخام (Raw) من GitHub Gist بدون رمز الـ commit الطويل.
                 </p>
                 <input 
                     type="url" 
                     value={editableUpdateUrl} 
                     onChange={e => setEditableUpdateUrl(e.target.value)}
                     className="form-input"
-                    placeholder="https://example.com/data.json"
+                    placeholder="https://gist.githubusercontent.com/user/id/raw/"
                 />
                 <button onClick={handleUpdateUrlSave} className="btn btn-primary mt-2">حفظ رابط التحديث</button>
               </div>
@@ -1001,7 +1018,7 @@ const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCre
     );
 };
 
-const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: () => void, onImport: (data: any) => void }) => {
+const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: () => void, onImport: (data: any, options: { isPrivileged: boolean }) => void }) => {
     const [file, setFile] = useState<File | null>(null);
 
     if (!isOpen) return null;
@@ -1024,7 +1041,8 @@ const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: 
                 const text = e.target?.result;
                 if (typeof text !== 'string') throw new Error("الملف غير قابل للقراءة");
                 const data = JSON.parse(text);
-                onImport(data);
+                // Perform a non-privileged import for visitors
+                onImport(data, { isPrivileged: false });
                 onClose(); // Close modal on success
             } catch (error) {
                 console.error("فشل في تحديث المحتوى:", error);
