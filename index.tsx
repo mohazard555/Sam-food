@@ -83,7 +83,7 @@ const App = () => {
   const [logo, setLogo] = useLocalStorage<string | null>('siteLogo', null);
   const [adminCredentials, setAdminCredentials] = useLocalStorage<AdminCredentials>('adminCredentials', { username: 'admin', password: '12345' });
   const [updateKey, setUpdateKey] = useLocalStorage<string>('updateKey', 'DEFAULT_KEY');
-  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', 'https://gist.githubusercontent.com/mohazard555/62a7e720fbfbc505880fb03b1afb8a84/raw/');
+  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', '');
   const [lastUpdateKey, setLastUpdateKey] = useLocalStorage<string | null>('lastUpdateKey', null);
   const [aboutContent, setAboutContent] = useLocalStorage<string>(
     'aboutContent',
@@ -146,7 +146,10 @@ const App = () => {
             }
         } catch (error) {
             console.error('Error during data fetch:', error);
-            setLoadError('حدث خطأ أثناء تحميل محتوى الموقع. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.');
+            // If the update fails, we'll just use the cached data.
+            // Don't show a blocking error screen, especially for first-time users
+            // who won't have any cached data. The app should still be usable.
+            console.warn('Failed to fetch updates, using cached data.');
         } finally {
             setIsLoading(false);
         }
@@ -568,196 +571,43 @@ const AdCard: React.FC<{ ad: Ad, onDelete: (id: string) => void, onEdit: (ad: Ad
     </div>
 );
 
+// Fix: Define missing components to resolve "Cannot find name" errors.
 const RecipeDetail = ({ recipe, onEdit, onDelete, onDownload, isLoggedIn }: { recipe: Recipe, onEdit: (recipe: Recipe) => void, onDelete: (id: string) => void, onDownload: (recipe: Recipe) => void, isLoggedIn: boolean }) => (
-    <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg max-w-4xl mx-auto printable-area">
-        <img src={recipe.image} alt={recipe.name} className="w-full h-64 md:h-96 object-cover rounded-lg mb-6"/>
-        <h1 className="text-4xl font-bold mb-2">{recipe.name}</h1>
-        <span className="inline-block bg-purple-100 text-purple-700 text-sm font-semibold px-3 py-1 rounded-full mb-6">{recipe.category}</span>
+    <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 max-w-4xl mx-auto printable-area">
+        <div className="flex justify-between items-start mb-6 no-print">
+            {isLoggedIn && (
+                <div className="flex gap-4">
+                    <button onClick={() => onEdit(recipe)} className="btn btn-secondary">تعديل</button>
+                    <button onClick={() => onDelete(recipe.id)} className="btn btn-danger">حذف</button>
+                </div>
+            )}
+            <div className="flex gap-4">
+                 <button onClick={() => onDownload(recipe)} className="btn btn-outline">تحميل</button>
+                 <button onClick={() => window.print()} className="btn btn-primary">طباعة</button>
+            </div>
+        </div>
+        
+        <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">{recipe.name}</h1>
+            <p className="text-lg text-purple-600 font-semibold">{recipe.category}</p>
+        </div>
 
+        <img src={recipe.image} alt={recipe.name} className="w-full h-64 md:h-96 object-cover rounded-lg mb-8" />
+        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="md:col-span-1">
-                <h2 className="text-2xl font-bold border-b-2 border-purple-400 pb-2 mb-4">المكونات</h2>
-                <ul className="list-disc list-inside space-y-2 text-gray-700">
-                    {recipe.ingredients.map((ing, index) => <li key={index}>{ing}</li>)}
+                <h2 className="text-2xl font-bold mb-4 border-b-2 border-purple-200 pb-2">المكونات</h2>
+                <ul className="list-disc list-inside space-y-2 text-lg text-gray-700">
+                    {recipe.ingredients.map((ingredient, index) => (
+                        <li key={index}>{ingredient}</li>
+                    ))}
                 </ul>
             </div>
             <div className="md:col-span-2">
-                <h2 className="text-2xl font-bold border-b-2 border-purple-400 pb-2 mb-4">خطوات التحضير</h2>
-                <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{recipe.steps}</p>
+                <h2 className="text-2xl font-bold mb-4 border-b-2 border-purple-200 pb-2">خطوات التحضير</h2>
+                <div className="prose max-w-none text-lg text-gray-700 whitespace-pre-wrap">{recipe.steps}</div>
             </div>
         </div>
-
-        <div className="mt-8 pt-6 border-t flex flex-wrap gap-4 justify-center no-print">
-            <button onClick={() => onDownload(recipe)} className="btn btn-primary">تحميل الوصفة</button>
-            <button onClick={() => window.print()} className="btn btn-secondary">طباعة</button>
-            {isLoggedIn && (
-              <>
-                <button onClick={() => onEdit(recipe)} className="btn btn-secondary bg-blue-500 hover:bg-blue-600">تعديل</button>
-                <button onClick={() => onDelete(recipe.id)} className="btn btn-danger">حذف</button>
-              </>
-            )}
-        </div>
-    </div>
-);
-
-const RecipeForm = ({ onSave, existingRecipe }: { onSave: (recipe: Recipe) => void, existingRecipe: Recipe | null }) => {
-    const [name, setName] = useState('');
-    const [category, setCategory] = useState(CATEGORIES[0]);
-    const [image, setImage] = useState('');
-    const [imagePreview, setImagePreview] = useState('');
-    const [ingredients, setIngredients] = useState('');
-    const [steps, setSteps] = useState('');
-
-    useEffect(() => {
-        if (existingRecipe) {
-            setName(existingRecipe.name);
-            setCategory(existingRecipe.category);
-            setImage(existingRecipe.image);
-            setImagePreview(existingRecipe.image);
-            setIngredients(existingRecipe.ingredients.join('\n'));
-            setSteps(existingRecipe.steps);
-        }
-    }, [existingRecipe]);
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const base64 = await toBase64(file);
-            setImage(base64);
-            setImagePreview(base64);
-        }
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!name || !category || !image || !ingredients || !steps) {
-            alert('يرجى ملء جميع الحقول.');
-            return;
-        }
-        onSave({
-            id: existingRecipe ? existingRecipe.id : Date.now().toString(),
-            name,
-            category,
-            image,
-            ingredients: ingredients.split('\n').filter(ing => ing.trim() !== ''),
-            steps,
-        });
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow-lg max-w-2xl mx-auto space-y-6">
-            <h2 className="text-3xl font-bold text-center text-gray-700">{existingRecipe ? 'تعديل وصفة' : 'إضافة وصفة جديدة'}</h2>
-            
-            <div>
-                <label className="block font-medium mb-1">اسم الوصفة</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} className="form-input" required />
-            </div>
-
-            <div>
-                <label className="block font-medium mb-1">اختر القسم</label>
-                <select value={category} onChange={e => setCategory(e.target.value)} className="form-select" required>
-                    {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </select>
-            </div>
-
-            <div>
-                <label className="block font-medium mb-1">صورة الوصفة</label>
-                <input type="file" onChange={handleImageChange} accept="image/*" className="form-input" />
-                {imagePreview && <img src={imagePreview} alt="معاينة الصورة" className="mt-4 rounded-md w-full h-48 object-cover" />}
-            </div>
-
-            <div>
-                <label className="block font-medium mb-1">المكونات (كل مكون في سطر)</label>
-                <textarea value={ingredients} onChange={e => setIngredients(e.target.value)} rows={6} className="form-textarea" required></textarea>
-            </div>
-
-            <div>
-                <label className="block font-medium mb-1">خطوات التحضير</label>
-                <textarea value={steps} onChange={e => setSteps(e.target.value)} rows={8} className="form-textarea" required></textarea>
-            </div>
-
-            <button type="submit" className="btn btn-primary w-full py-3">{existingRecipe ? 'حفظ التعديلات' : 'حفظ الوصفة'}</button>
-        </form>
-    );
-};
-
-const AdForm = ({ onSave, existingAd }: { onSave: (ad: Ad) => void, existingAd: Ad | null }) => {
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [link, setLink] = useState('');
-    const [image, setImage] = useState('');
-    const [imagePreview, setImagePreview] = useState('');
-    
-    useEffect(() => {
-        if (existingAd) {
-            setTitle(existingAd.title);
-            setDescription(existingAd.description);
-            setLink(existingAd.link);
-            setImage(existingAd.image);
-            setImagePreview(existingAd.image);
-        }
-    }, [existingAd]);
-
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const base64 = await toBase64(file);
-            setImage(base64);
-            setImagePreview(base64);
-        }
-    };
-    
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!title || !link || !image) {
-            alert('يرجى ملء حقول العنوان، الرابط، والصورة.');
-            return;
-        }
-        onSave({
-            id: existingAd ? existingAd.id : Date.now().toString(),
-            title,
-            description,
-            link,
-            image,
-        });
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="bg-white p-6 md:p-8 rounded-lg shadow-lg max-w-2xl mx-auto space-y-6">
-            <h2 className="text-3xl font-bold text-center text-gray-700">{existingAd ? 'تعديل الإعلان' : 'إضافة إعلان جديد'}</h2>
-            
-            <div>
-                <label className="block font-medium mb-1">عنوان الإعلان</label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="form-input" required />
-            </div>
-
-            <div>
-                <label className="block font-medium mb-1">وصف قصير</label>
-                <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="form-input" />
-            </div>
-            
-            <div>
-                <label className="block font-medium mb-1">الرابط (URL)</label>
-                <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://example.com" className="form-input" required />
-            </div>
-
-            <div>
-                <label className="block font-medium mb-1">صورة الإعلان</label>
-                <input type="file" onChange={handleImageChange} accept="image/*" className="form-input" />
-                {imagePreview && <img src={imagePreview} alt="معاينة الصورة" className="mt-4 rounded-md w-full h-48 object-cover" />}
-            </div>
-
-            <button type="submit" className="btn btn-primary w-full py-3">{existingAd ? 'حفظ التعديلات' : 'حفظ الإعلان'}</button>
-        </form>
-    );
-};
-
-const AboutPage = ({ content }: { content: string }) => (
-    <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg max-w-3xl mx-auto text-center">
-        <h2 className="text-3xl font-bold mb-4 text-gray-700">عن SAM FOOD</h2>
-        <p className="text-lg text-gray-600 leading-relaxed whitespace-pre-wrap">
-            {content}
-        </p>
     </div>
 );
 
@@ -775,43 +625,180 @@ const LoginPage = ({ onLogin, onGuest, adminCredentials }: { onLogin: (success: 
             setError('اسم المستخدم أو كلمة المرور غير صحيحة.');
         }
     };
-    
+
     return (
-        <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
-            <div className="w-full max-w-4xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden md:grid md:grid-cols-2">
-                <div className="hidden md:block">
-                    <img src="https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1200&auto=format&fit=crop" alt="Delicious food" className="object-cover w-full h-full" />
-                </div>
-                <div className="p-8 md:p-12 flex flex-col justify-center">
-                    <form onSubmit={handleSubmit} className="w-full space-y-6">
-                        <div className="text-center mb-6">
-                            <h2 className="text-3xl font-bold text-gray-800">أهلاً بك في SAM FOOD</h2>
-                            <p className="text-gray-500 mt-2">سجل الدخول لإدارة المحتوى</p>
-                        </div>
-                        {error && <p className="text-red-500 text-center bg-red-100 p-3 rounded-md">{error}</p>}
-                        <div>
-                            <label className="block font-medium mb-1">اسم المستخدم</label>
-                            <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="form-input" required placeholder="admin" />
-                        </div>
-                         <div>
-                            <label className="block font-medium mb-1">كلمة المرور</label>
-                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="form-input" required placeholder="•••••" />
-                        </div>
-                        <button type="submit" className="btn btn-primary w-full py-3 text-lg">دخول</button>
-                        <div className="flex items-center justify-between">
-                            <hr className="w-full border-gray-300" />
-                            <span className="p-2 text-gray-400 text-sm">أو</span>
-                            <hr className="w-full border-gray-300" />
-                        </div>
-                        <button type="button" onClick={onGuest} className="btn bg-gray-600 hover:bg-gray-700 w-full py-3 text-lg">تصفح كزائر</button>
-                    </form>
+        <div className="min-h-[calc(100vh-200px)] flex items-center justify-center bg-gray-50">
+            <div className="max-w-md w-full bg-white shadow-md rounded-lg p-8 space-y-6">
+                <h2 className="text-3xl font-bold text-center text-gray-800">تسجيل الدخول</h2>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <label htmlFor="username" className="form-label">اسم المستخدم</label>
+                        <input id="username" type="text" value={username} onChange={e => setUsername(e.target.value)} className="form-input" required />
+                    </div>
+                    <div>
+                        <label htmlFor="password" className="form-label">كلمة المرور</label>
+                        <input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} className="form-input" required />
+                    </div>
+                    {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                    <button type="submit" className="btn btn-primary w-full">دخول</button>
+                </form>
+                <div className="text-center">
+                    <p className="text-gray-600">أو</p>
+                    <button onClick={onGuest} className="text-purple-600 hover:underline font-medium">المتابعة كضيف</button>
                 </div>
             </div>
         </div>
     );
 };
 
-interface AdminPageProps {
+const RecipeForm = ({ onSave, existingRecipe }: { onSave: (recipe: Recipe) => void, existingRecipe: Recipe | null }) => {
+    const [name, setName] = useState('');
+    const [category, setCategory] = useState(CATEGORIES[0]);
+    const [image, setImage] = useState('');
+    const [ingredients, setIngredients] = useState('');
+    const [steps, setSteps] = useState('');
+
+    useEffect(() => {
+        if (existingRecipe) {
+            setName(existingRecipe.name);
+            setCategory(existingRecipe.category);
+            setImage(existingRecipe.image);
+            setIngredients(existingRecipe.ingredients.join('\n'));
+            setSteps(existingRecipe.steps);
+        }
+    }, [existingRecipe]);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const base64 = await toBase64(e.target.files[0]);
+            setImage(base64);
+        }
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const recipe: Recipe = {
+            id: existingRecipe ? existingRecipe.id : new Date().toISOString(),
+            name,
+            category,
+            image,
+            ingredients: ingredients.split('\n').filter(ing => ing.trim() !== ''),
+            steps,
+        };
+        onSave(recipe);
+    };
+
+    return (
+        <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md">
+            <h2 className="text-3xl font-bold mb-6 text-gray-700">{existingRecipe ? 'تعديل وصفة' : 'إضافة وصفة جديدة'}</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                    <label htmlFor="name" className="form-label">اسم الوصفة</label>
+                    <input id="name" type="text" value={name} onChange={e => setName(e.target.value)} className="form-input" required />
+                </div>
+                <div>
+                    <label htmlFor="category" className="form-label">القسم</label>
+                    <select id="category" value={category} onChange={e => setCategory(e.target.value)} className="form-input" required>
+                        {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="image" className="form-label">رابط الصورة أو قم برفع صورة</label>
+                    <input id="image" type="text" value={image} onChange={e => setImage(e.target.value)} placeholder="https://example.com/image.jpg" className="form-input mb-2" />
+                    <input type="file" onChange={handleImageUpload} className="form-input" />
+                    {image && <img src={image} alt="معاينة" className="mt-4 rounded-lg w-48 h-48 object-cover"/>}
+                </div>
+                <div>
+                    <label htmlFor="ingredients" className="form-label">المكونات (كل مكون في سطر)</label>
+                    <textarea id="ingredients" value={ingredients} onChange={e => setIngredients(e.target.value)} rows={8} className="form-input" required></textarea>
+                </div>
+                <div>
+                    <label htmlFor="steps" className="form-label">خطوات التحضير</label>
+                    <textarea id="steps" value={steps} onChange={e => setSteps(e.target.value)} rows={12} className="form-input" required></textarea>
+                </div>
+                <button type="submit" className="btn btn-primary w-full">{existingRecipe ? 'حفظ التعديلات' : 'إضافة الوصفة'}</button>
+            </form>
+        </div>
+    );
+};
+
+const AdForm = ({ onSave, existingAd }: { onSave: (ad: Ad) => void, existingAd: Ad | null }) => {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [link, setLink] = useState('');
+    const [image, setImage] = useState('');
+
+    useEffect(() => {
+        if (existingAd) {
+            setTitle(existingAd.title);
+            setDescription(existingAd.description);
+            setLink(existingAd.link);
+            setImage(existingAd.image);
+        }
+    }, [existingAd]);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const base64 = await toBase64(e.target.files[0]);
+            setImage(base64);
+        }
+    };
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const ad: Ad = {
+            id: existingAd ? existingAd.id : new Date().toISOString(),
+            title,
+            description,
+            link,
+            image,
+        };
+        onSave(ad);
+    };
+
+    return (
+        <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md">
+            <h2 className="text-3xl font-bold mb-6 text-gray-700">{existingAd ? 'تعديل إعلان' : 'إضافة إعلان جديد'}</h2>
+            <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                    <label htmlFor="title" className="form-label">عنوان الإعلان</label>
+                    <input id="title" type="text" value={title} onChange={e => setTitle(e.target.value)} className="form-input" required />
+                </div>
+                <div>
+                    <label htmlFor="description" className="form-label">الوصف</label>
+                    <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} rows={4} className="form-input" required></textarea>
+                </div>
+                <div>
+                    <label htmlFor="link" className="form-label">رابط الإعلان</label>
+                    <input id="link" type="url" value={link} onChange={e => setLink(e.target.value)} className="form-input" required />
+                </div>
+                 <div>
+                    <label htmlFor="ad-image" className="form-label">رابط الصورة أو قم برفع صورة</label>
+                    <input id="ad-image-url" type="text" value={image} onChange={e => setImage(e.target.value)} placeholder="https://example.com/image.jpg" className="form-input mb-2" />
+                    <input type="file" id="ad-image-upload" onChange={handleImageUpload} className="form-input" />
+                    {image && <img src={image} alt="معاينة" className="mt-4 rounded-lg w-48 h-48 object-cover"/>}
+                </div>
+                <button type="submit" className="btn btn-primary w-full">{existingAd ? 'حفظ التعديلات' : 'إضافة الإعلان'}</button>
+            </form>
+        </div>
+    );
+};
+
+const AdminPage = ({
+    recipes,
+    ads,
+    onImport,
+    onLogoChange,
+    currentLogo,
+    adminCredentials,
+    onCredentialsChange,
+    aboutContent,
+    onAboutContentChange,
+    updateKey,
+    onUpdateKeyChange,
+    updateUrl,
+    onUpdateUrlChange,
+}: {
     recipes: Recipe[];
     ads: Ad[];
     onImport: (data: any, options: { isPrivileged: boolean }) => void;
@@ -825,276 +812,207 @@ interface AdminPageProps {
     onUpdateKeyChange: (key: string) => void;
     updateUrl: string;
     onUpdateUrlChange: (url: string) => void;
-}
-
-const AdminPage = ({ recipes, ads, onImport, onLogoChange, currentLogo, adminCredentials, onCredentialsChange, aboutContent, onAboutContentChange, updateKey, onUpdateKeyChange, updateUrl, onUpdateUrlChange }: AdminPageProps) => {
-
+}) => {
     const [newUsername, setNewUsername] = useState(adminCredentials.username);
     const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [editableAbout, setEditableAbout] = useState(aboutContent);
-    const [editableUpdateKey, setEditableUpdateKey] = useState(updateKey);
-    const [editableUpdateUrl, setEditableUpdateUrl] = useState(updateUrl);
-
-    const handleCredentialsSave = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newUsername || !newPassword) {
-            alert("اسم المستخدم وكلمة المرور الجديدة لا يمكن أن تكون فارغة.");
-            return;
-        }
-        if (newPassword !== confirmPassword) {
-            alert("كلمتا المرور غير متطابقتين.");
-            return;
-        }
-        if (window.confirm("هل أنت متأكد من تغيير معلومات الدخول؟ ستحتاج لتسجيل الدخول مجدداً بالمعلومات الجديدة في المرة القادمة.")) {
-            onCredentialsChange({ username: newUsername, password: newPassword });
-            alert("تم تحديث معلومات الدخول بنجاح.");
-            setNewPassword('');
-            setConfirmPassword('');
-        }
-    };
-    
-    const handleAboutSave = () => {
-        if (window.confirm("هل أنت متأكد من حفظ التغييرات على صفحة 'عن الموقع'؟")) {
-            onAboutContentChange(editableAbout);
-            alert("تم تحديث محتوى الصفحة بنجاح.");
-        }
-    };
-    
-    const handleUpdateKeySave = () => {
-        if (!editableUpdateKey.trim()) {
-            alert("مفتاح التحديث لا يمكن أن يكون فارغاً.");
-            return;
-        }
-        if (window.confirm("هل أنت متأكد من حفظ مفتاح التحديث الجديد؟ ستحتاج لمشاركته مع الزوار ليتمكنوا من تحديث المحتوى.")) {
-            onUpdateKeyChange(editableUpdateKey);
-            alert("تم حفظ مفتاح التحديث بنجاح.");
-        }
-    };
-
-    const handleUpdateUrlSave = () => {
-        if (window.confirm("هل أنت متأكد من حفظ رابط التحديث الجديد؟")) {
-            onUpdateUrlChange(editableUpdateUrl);
-            alert("تم حفظ رابط التحديث بنجاح.");
-        }
-    };
 
     const handleExport = () => {
-        const dataToExport = {
+        const data = {
             recipes,
             ads,
             logo: currentLogo,
-            adminCredentials,
             aboutContent,
+            adminCredentials: { username: adminCredentials.username, password: adminCredentials.password },
             updateKey,
             updateUrl,
         };
-        const jsonString = JSON.stringify(dataToExport, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `sam_food_backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.download = 'sam_food_backup.json';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
-    const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const text = e.target?.result;
-                if (typeof text !== 'string') throw new Error("File is not readable");
-                const data = JSON.parse(text);
-                onImport(data, { isPrivileged: true });
-            } catch (error) {
-                console.error("Failed to import data:", error);
-                alert(`فشل استيراد البيانات: ${error.message}`);
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = ''; // Reset file input
-    };
-
-    const handleLogoChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-        try {
-            const base64 = await toBase64(file);
-            onLogoChange(base64);
-            alert("تم تغيير الشعار بنجاح.");
-        } catch (error) {
-            alert("فشل رفع الشعار.");
+    const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target?.result as string);
+                    onImport(data, { isPrivileged: true });
+                } catch (error) {
+                    alert('ملف غير صالح.');
+                }
+            };
+            reader.readAsText(file);
         }
     };
     
-    const handleLogoReset = () => {
-        if(window.confirm("هل أنت متأكد من إعادة الشعار للافتراضي؟")) {
-            onLogoChange(null);
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const base64 = await toBase64(e.target.files[0]);
+            onLogoChange(base64);
         }
+    };
+    
+    const handleCredentialsChange = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newPassword) {
+            alert("يرجى إدخال كلمة مرور جديدة.");
+            return;
+        }
+        onCredentialsChange({ username: newUsername, password: newPassword });
+        alert("تم تحديث بيانات الدخول بنجاح.");
+        setNewPassword('');
+    };
+    
+    const handleGenerateUpdateKey = () => {
+        onUpdateKeyChange(new Date().toISOString());
     };
 
     return (
-      <div className="max-w-4xl mx-auto space-y-8">
-        <h1 className="text-4xl font-bold text-center text-gray-700">لوحة تحكم المدير</h1>
-  
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة بيانات الموقع</h2>
-            <p className="text-gray-600">
-              يمكنك تصدير جميع بيانات الموقع كملف احتياطي، أو استيراد ملف لاستعادة البيانات.
-              <br/>
-              <strong className="text-red-600">تحذير:</strong> الاستيراد سيقوم بالكتابة فوق جميع البيانات الحالية.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <button onClick={handleExport} className="btn btn-primary">تصدير البيانات</button>
-              <label className="btn btn-secondary cursor-pointer">
-                <span>استيراد البيانات (للمدير)</span>
-                <input type="file" className="hidden" accept=".json" onChange={handleImportFile} />
-              </label>
-            </div>
-        </div>
-  
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة الشعار</h2>
-            <div className="flex items-center gap-4">
-              <span className="font-medium">الشعار الحالي:</span>
-              <Logo logo={currentLogo} />
-            </div>
-            <div className="flex flex-wrap gap-4">
-              <label className="btn btn-primary cursor-pointer">
-                <span>تغيير الشعار</span>
-                <input type="file" className="hidden" accept="image/*" onChange={handleLogoChange} />
-              </label>
-              <button onClick={handleLogoReset} className="btn btn-secondary">إعادة الشعار للافتراضي</button>
-            </div>
-        </div>
-        
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">إدارة التحديث التلقائي للزوار</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block font-medium mb-1">رابط ملف التحديث (URL)</label>
-                <p className="text-gray-600 text-sm mb-2">
-                  ضع هنا رابط ملف JSON الذي قمت بتصديره. سيستخدمه الزوار للحصول على التحديثات تلقائيًا عند فتح الموقع.
-                  <br/>
-                  <strong>ملاحظة:</strong> استخدم رابط النسخة الخام (Raw) من GitHub Gist بدون رمز الـ commit الطويل.
-                </p>
-                <input 
-                    type="url" 
-                    value={editableUpdateUrl} 
-                    onChange={e => setEditableUpdateUrl(e.target.value)}
-                    className="form-input"
-                    placeholder="https://gist.githubusercontent.com/user/id/raw/"
-                />
-                <button onClick={handleUpdateUrlSave} className="btn btn-primary mt-2">حفظ رابط التحديث</button>
-              </div>
-              <hr/>
-              <div>
-                <label className="block font-medium mb-1">مفتاح التحديث</label>
-                 <p className="text-gray-600 text-sm mb-2">
-                   هذا المفتاح يستخدم للتحقق من وجود تحديث جديد. قم بتغييره في كل مرة تصدر فيها تحديثًا جديدًا للمحتوى.
-                 </p>
-                <input 
-                    type="text" 
-                    value={editableUpdateKey} 
-                    onChange={e => setEditableUpdateKey(e.target.value)}
-                    className="form-input"
-                />
-                <button onClick={handleUpdateKeySave} className="btn btn-primary mt-2">حفظ مفتاح التحديث</button>
-              </div>
-            </div>
-        </div>
+        <div className="max-w-5xl mx-auto space-y-12">
+            <h1 className="text-4xl font-bold text-gray-800 text-center">لوحة التحكم</h1>
 
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تعديل محتوى "عن الموقع"</h2>
-            <textarea 
-                value={editableAbout} 
-                onChange={e => setEditableAbout(e.target.value)}
-                rows={8}
-                className="form-textarea"
-            ></textarea>
-            <button onClick={handleAboutSave} className="btn btn-primary">حفظ محتوى "عن الموقع"</button>
+            <div className="card">
+                <h2 className="card-header">إدارة البيانات</h2>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                    <div>
+                        <p className="mb-2 text-gray-600">تصدير جميع البيانات (وصفات, إعلانات, إعدادات) كملف احتياطي.</p>
+                        <button onClick={handleExport} className="btn btn-primary">تصدير البيانات</button>
+                    </div>
+                    <div>
+                        <label htmlFor="import-file" className="form-label">استيراد بيانات من ملف</label>
+                        <input id="import-file" type="file" onChange={handleImportFile} className="form-input" accept=".json" />
+                    </div>
+                </div>
+            </div>
+
+            <div className="card">
+                <h2 className="card-header">إعدادات الموقع</h2>
+                <div className="p-6 space-y-6">
+                    <div>
+                        <label className="form-label">شعار الموقع</label>
+                        <div className="flex items-center gap-4">
+                            {currentLogo ? <img src={currentLogo} alt="الشعار الحالي" className="h-16 w-auto bg-gray-100 p-1 rounded"/> : <p className="text-gray-500">لا يوجد شعار حالي</p>}
+                             <input type="file" onChange={handleLogoUpload} className="form-input max-w-xs" accept="image/*" />
+                             <button onClick={() => onLogoChange(null)} className="btn btn-secondary">إزالة الشعار</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label htmlFor="about-content" className="form-label">محتوى صفحة "عن الموقع"</label>
+                        <textarea id="about-content" value={aboutContent} onChange={e => onAboutContentChange(e.target.value)} rows={8} className="form-input"></textarea>
+                    </div>
+                </div>
+            </div>
+            
+             <div className="card">
+                <h2 className="card-header">إعدادات التحديث التلقائي</h2>
+                <div className="p-6 space-y-6">
+                    <div>
+                        <label htmlFor="update-url" className="form-label">رابط ملف التحديث (JSON URL)</label>
+                        <input id="update-url" type="url" value={updateUrl} onChange={e => onUpdateUrlChange(e.target.value)} className="form-input" placeholder="https://example.com/data.json" />
+                        <p className="form-hint">هذا الرابط سيتم استخدامه لجلب التحديثات للزوار.</p>
+                    </div>
+                     <div>
+                        <label htmlFor="update-key" className="form-label">مفتاح التحديث</label>
+                        <div className="flex items-center gap-2">
+                             <input id="update-key" type="text" value={updateKey} onChange={e => onUpdateKeyChange(e.target.value)} className="form-input" />
+                             <button onClick={handleGenerateUpdateKey} className="btn btn-secondary flex-shrink-0">إنشاء مفتاح جديد</button>
+                        </div>
+                        <p className="form-hint">عندما يتغير هذا المفتاح في ملف JSON، سيقوم التطبيق بتحديث البيانات.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="card">
+                <h2 className="card-header">تغيير بيانات الدخول</h2>
+                <form onSubmit={handleCredentialsChange} className="p-6 space-y-4">
+                     <div>
+                        <label htmlFor="username-change" className="form-label">اسم المستخدم</label>
+                        <input id="username-change" type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="form-input" required />
+                    </div>
+                     <div>
+                        <label htmlFor="password-change" className="form-label">كلمة المرور الجديدة</label>
+                        <input id="password-change" type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="form-input" placeholder="اتركها فارغة لعدم التغيير" required/>
+                    </div>
+                    <button type="submit" className="btn btn-primary">تحديث البيانات</button>
+                </form>
+            </div>
         </div>
-        
-        <div className="bg-white p-6 md:p-8 rounded-lg shadow-lg space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800 border-b pb-3">تغيير معلومات الدخول</h2>
-            <form onSubmit={handleCredentialsSave} className="space-y-4">
-              <div>
-                  <label className="block font-medium mb-1">اسم المستخدم الجديد</label>
-                  <input type="text" value={newUsername} onChange={e => setNewUsername(e.target.value)} className="form-input" />
-              </div>
-              <div>
-                  <label className="block font-medium mb-1">كلمة المرور الجديدة</label>
-                  <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="form-input" />
-              </div>
-              <div>
-                  <label className="block font-medium mb-1">تأكيد كلمة المرور الجديدة</label>
-                  <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="form-input" />
-              </div>
-              <button type="submit" className="btn btn-primary">حفظ معلومات الدخول</button>
-            </form>
-        </div>
-      </div>
     );
 };
 
-const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: () => void, onImport: (data: any, options: { isPrivileged: boolean }) => void }) => {
-    const [file, setFile] = useState<File | null>(null);
+const AboutPage = ({ content }: { content: string }) => (
+    <div className="max-w-3xl mx-auto bg-white p-8 rounded-lg shadow-md min-h-[calc(100vh-280px)]">
+        <h1 className="text-4xl font-bold mb-6 text-gray-800 border-b-2 pb-4">عن الموقع</h1>
+        <div className="prose max-w-none text-lg text-gray-700 whitespace-pre-wrap">
+            {content}
+        </div>
+    </div>
+);
+
+const UpdateModal = ({ isOpen, onClose, onImport }: { isOpen: boolean, onClose: () => void, onImport: (data: any, options?: { isPrivileged: boolean }) => void }) => {
+    const [jsonContent, setJsonContent] = useState('');
 
     if (!isOpen) return null;
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setFile(e.target.files[0]);
+    
+    const handleImport = () => {
+        try {
+            const data = JSON.parse(jsonContent);
+            onImport(data); // Don't use privileged import for manual updates
+            onClose();
+        } catch (error) {
+            alert('JSON غير صالح. يرجى التحقق من المحتوى.');
         }
     };
     
-    const handleUpdate = () => {
-        if (!file) {
-            alert("يرجى اختيار ملف التحديث أولاً.");
-            return;
+    const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+         const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const content = event.target?.result as string;
+                setJsonContent(content);
+            };
+            reader.readAsText(file);
         }
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const text = e.target?.result;
-                if (typeof text !== 'string') throw new Error("الملف غير قابل للقراءة");
-                const data = JSON.parse(text);
-                // Perform a non-privileged import for visitors
-                onImport(data, { isPrivileged: false });
-                onClose(); // Close modal on success
-            } catch (error) {
-                console.error("فشل في تحديث المحتوى:", error);
-                alert(`فشل في تحديث المحتوى: ${error.message}`);
-            }
-        };
-        reader.readAsText(file);
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-md space-y-4 relative">
-                 <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
-                <h2 className="text-2xl font-bold text-center text-gray-700">تحديث المحتوى يدوياً</h2>
-                <p className="text-center text-gray-600">
-                    في حال لم يعمل التحديث التلقائي، يمكنك رفع ملف التحديث الذي حصلت عليه من مدير الموقع.
-                </p>
+        <div className="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl p-6 md:p-8 w-full max-w-2xl space-y-6 relative">
+                <button onClick={onClose} className="absolute top-4 left-4 text-gray-500 hover:text-gray-800 text-2xl font-bold">&times;</button>
+                <h2 className="text-2xl font-bold text-gray-700">تحديث المحتوى يدوياً</h2>
+                <p className="text-gray-600">يمكنك استيراد البيانات من ملف JSON أو لصق محتوى JSON مباشرة.</p>
                 <div>
-                    <label className="block font-medium mb-2">اختر ملف التحديث (JSON):</label>
-                    <input type="file" accept=".json" onChange={handleFileChange} className="form-input" />
+                    <label htmlFor="import-file-modal" className="form-label">استيراد من ملف:</label>
+                    <input id="import-file-modal" type="file" onChange={handleFileImport} className="form-input" accept=".json" />
                 </div>
-                <button onClick={handleUpdate} className="btn btn-primary w-full py-3">تحديث الآن</button>
+                <div>
+                     <label htmlFor="json-content" className="form-label">أو الصق محتوى JSON هنا:</label>
+                     <textarea
+                        id="json-content"
+                        rows={10}
+                        value={jsonContent}
+                        onChange={(e) => setJsonContent(e.target.value)}
+                        className="form-input font-mono text-sm"
+                        placeholder='{ "recipes": [...], "ads": [...] }'
+                    ></textarea>
+                </div>
+                <div className="flex justify-end gap-4">
+                    <button onClick={onClose} className="btn btn-secondary">إلغاء</button>
+                    <button onClick={handleImport} className="btn btn-primary">استيراد البيانات</button>
+                </div>
             </div>
         </div>
     );
-}
+};
 
-
-const root = createRoot(document.getElementById('root')!);
+const root = createRoot(document.getElementById('root') as HTMLElement);
 root.render(<App />);
