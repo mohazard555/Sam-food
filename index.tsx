@@ -37,6 +37,8 @@ interface HomePageProps {
   isLoggedIn: boolean;
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  isLoading: boolean;
+  loadError: string | null;
 }
 
 const CATEGORIES = ["حلويات", "أطباق رئيسية", "مقبلات", "سلطات", "مشروبات"];
@@ -100,26 +102,36 @@ const App = () => {
   const [isSubscribed, setIsSubscribed] = useLocalStorage<boolean>('isSubscribed', false);
   const [subscriptionRequest, setSubscriptionRequest] = useState<Recipe | null>(null);
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     const checkForUpdates = async () => {
-        if (isLoggedIn || !updateUrl) {
-            return; // Don't auto-update for admin or if URL is not set
+        if (isLoggedIn) {
+            setIsLoading(false);
+            return;
         }
+        if (!updateUrl) {
+            setIsLoading(false);
+            return; 
+        }
+
+        setIsLoading(true);
+        setLoadError(null);
+
         try {
-            // Add cache-busting parameter to the fetch URL
             const url = new URL(updateUrl);
             url.searchParams.append('_t', new Date().getTime().toString());
             
-            const response = await fetch(url.toString());
+            const response = await fetch(url.toString(), { cache: 'no-store' });
+            
             if (!response.ok) {
-                console.warn(`Auto-update failed: Could not fetch from ${updateUrl}`);
-                return;
+                throw new Error(`فشل الاتصال بالخادم (رمز الحالة: ${response.status})`);
             }
             const data = await response.json();
             
-            // Apply update if it's the first time (lastUpdateKey is null) OR if the key is new
             if (data && data.updateKey && (lastUpdateKey === null || data.updateKey !== lastUpdateKey)) {
-                console.log('New or initial data found, applying...');
+                console.log('تطبيق تحديث جديد أو بيانات أولية...');
                 const newRecipes = data.recipes || [];
                 setRecipes(newRecipes);
                 setAds(data.ads || []);
@@ -133,13 +145,15 @@ const App = () => {
                 setLastUpdateKey(data.updateKey);
             }
         } catch (error) {
-            console.error('Error during auto-update check:', error);
+            console.error('Error during data fetch:', error);
+            setLoadError('حدث خطأ أثناء تحميل محتوى الموقع. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.');
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const timer = setTimeout(checkForUpdates, 2000); // Check after 2 seconds
-    return () => clearTimeout(timer);
-}, [isLoggedIn, updateUrl, lastUpdateKey]);
+    checkForUpdates();
+  }, [isLoggedIn]);
 
 
   const handleLogin = (success: boolean) => {
@@ -159,8 +173,6 @@ const App = () => {
   const navigate = (page: string) => {
     window.scrollTo(0, 0);
     setPage(page);
-    // BUG FIX: Do not nullify selected recipe on general navigation.
-    // setSelectedRecipe(null); 
     setEditingRecipe(null);
     setEditingAd(null);
   };
@@ -170,19 +182,15 @@ const App = () => {
         setSelectedRecipe(recipe);
         navigate('recipeDetail');
     } else {
-        setSubscriptionRequest(recipe); // Open subscription modal
+        setSubscriptionRequest(recipe);
     }
   };
 
   const handleSubscriptionConfirm = () => {
       if (subscriptionRequest) {
-          // First, set the recipe that will be needed on the next page
           setSelectedRecipe(subscriptionRequest);
-          // Mark as subscribed for future clicks
           setIsSubscribed(true);
-          // Navigate to the detail page
           navigate('recipeDetail');
-          // Finally, clean up state related to the modal
           setSubscriptionRequest(null);
       }
   };
@@ -260,7 +268,6 @@ ${recipe.steps}
           if (data.logo) setLogo(data.logo);
           if (data.aboutContent) setAboutContent(data.aboutContent);
 
-          // Only privileged (admin) imports can change sensitive settings
           if (options.isPrivileged) {
               if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
               if (data.updateKey) setUpdateKey(data.updateKey);
@@ -315,10 +322,10 @@ ${recipe.steps}
           case 'about':
             return <AboutPage content={aboutContent}/>;
           case 'login':
-             return isLoggedIn ? <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onEditRecipe={editRecipe} onDeleteRecipe={deleteRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} /> : <LoginPage onLogin={handleLogin} onGuest={() => navigate('home')} adminCredentials={adminCredentials} />;
+             return isLoggedIn ? <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onEditRecipe={editRecipe} onDeleteRecipe={deleteRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} isLoading={isLoading} loadError={loadError}/> : <LoginPage onLogin={handleLogin} onGuest={() => navigate('home')} adminCredentials={adminCredentials} />;
           case 'home':
           default:
-            return <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onEditRecipe={editRecipe} onDeleteRecipe={deleteRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />;
+            return <HomePage recipes={recipes} ads={ads} onViewRecipe={viewRecipe} onEditRecipe={editRecipe} onDeleteRecipe={deleteRecipe} onDeleteAd={deleteAd} onEditAd={editAd} onNavigate={navigate} isLoggedIn={isLoggedIn} searchQuery={searchQuery} setSearchQuery={setSearchQuery} isLoading={isLoading} loadError={loadError} />;
         }
       };
 
@@ -435,7 +442,7 @@ const Footer = ({ onOpenUpdateModal }: { onOpenUpdateModal: () => void }) => (
     </footer>
 );
 
-const HomePage = ({ recipes, ads, onViewRecipe, onEditRecipe, onDeleteRecipe, onDeleteAd, onEditAd, onNavigate, isLoggedIn, searchQuery }: HomePageProps) => {
+const HomePage = ({ recipes, ads, onViewRecipe, onEditRecipe, onDeleteRecipe, onDeleteAd, onEditAd, onNavigate, isLoggedIn, searchQuery, isLoading, loadError }: HomePageProps) => {
     const [selectedCategory, setSelectedCategory] = useState<string>('الكل');
     
     const filteredRecipes = useMemo(() => {
@@ -446,6 +453,23 @@ const HomePage = ({ recipes, ads, onViewRecipe, onEditRecipe, onDeleteRecipe, on
                 recipe.category.toLowerCase().includes(searchQuery.toLowerCase())
             );
     }, [recipes, selectedCategory, searchQuery]);
+
+    if (isLoading) {
+      return (
+          <div className="text-center p-12 min-h-[calc(100vh-280px)] flex items-center justify-center">
+              <p className="text-xl text-gray-600 animate-pulse">جاري تحميل الوصفات...</p>
+          </div>
+      );
+    }
+
+    if (loadError) {
+        return (
+            <div className="text-center p-8 my-8 bg-red-50 border border-red-200 rounded-lg max-w-2xl mx-auto">
+                <h3 className="text-2xl font-bold text-red-700">حدث خطأ</h3>
+                <p className="text-red-600 mt-2">{loadError}</p>
+            </div>
+        );
+    }
 
     return (
       <div className="min-h-[calc(100vh-280px)]">
@@ -475,7 +499,7 @@ const HomePage = ({ recipes, ads, onViewRecipe, onEditRecipe, onDeleteRecipe, on
                     ))}
                 </div>
             ) : (
-                <p className="text-center text-gray-500 mt-8">لا توجد وصفات تطابق بحثك. جرب البحث بكلمة أخرى أو غيّر القسم.</p>
+                <p className="text-center text-gray-500 mt-8">لا توجد وصفات حالياً. قد يقوم المدير بإضافتها قريباً.</p>
             )}
         </section>
         
