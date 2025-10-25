@@ -78,12 +78,17 @@ const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) 
 
 // Main App Component
 const App = () => {
+  // A default URL for the data file. The admin should host their exported JSON
+  // and can override this by setting a new one in the admin panel.
+  // This ensures that new visitors can fetch the latest content.
+  const DEFAULT_UPDATE_URL = 'https://api.npoint.io/0e4c62c954054a3692cb';
+
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>('recipes', []);
   const [ads, setAds] = useLocalStorage<Ad[]>('ads', []);
   const [logo, setLogo] = useLocalStorage<string | null>('siteLogo', null);
   const [adminCredentials, setAdminCredentials] = useLocalStorage<AdminCredentials>('adminCredentials', { username: 'admin', password: '12345' });
   const [updateKey, setUpdateKey] = useLocalStorage<string>('updateKey', 'DEFAULT_KEY');
-  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', '');
+  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', DEFAULT_UPDATE_URL);
   const [lastUpdateKey, setLastUpdateKey] = useLocalStorage<string | null>('lastUpdateKey', null);
   const [aboutContent, setAboutContent] = useLocalStorage<string>(
     'aboutContent',
@@ -113,6 +118,9 @@ const App = () => {
         }
         if (!updateUrl) {
             setIsLoading(false);
+            if (recipes.length === 0) {
+                 setLoadError("لم يتم تكوين رابط التحديث. يرجى تسجيل الدخول كمدير وتعيين 'رابط ملف التحديث' في لوحة التحكم.");
+            }
             return; 
         }
 
@@ -130,31 +138,44 @@ const App = () => {
             }
             const data = await response.json();
             
-            if (data && data.updateKey && (lastUpdateKey === null || data.updateKey !== lastUpdateKey)) {
+            const needsUpdate = data && data.updateKey && (lastUpdateKey === null || data.updateKey !== lastUpdateKey);
+            const isFirstLoadWithEmptyCache = recipes.length === 0 && data && Array.isArray(data.recipes);
+
+            if (needsUpdate || isFirstLoadWithEmptyCache) {
                 console.log('تطبيق تحديث جديد أو بيانات أولية...');
                 
-                if (Array.isArray(data.recipes)) {
-                    const newRecipes = data.recipes;
-                    setRecipes(newRecipes);
-                    if (selectedRecipe && !newRecipes.some(r => r.id === selectedRecipe.id)) {
+                if ('recipes' in data && Array.isArray(data.recipes)) {
+                    setRecipes(data.recipes);
+                    if (selectedRecipe && !data.recipes.some(r => r.id === selectedRecipe.id)) {
                         setSelectedRecipe(null);
                     }
                 }
-                if (Array.isArray(data.ads)) {
+                if ('ads' in data && Array.isArray(data.ads)) {
                     setAds(data.ads);
                 }
-                if (typeof data.logo !== 'undefined') {
+                if ('logo' in data) {
                     setLogo(data.logo);
                 }
-                if (typeof data.aboutContent !== 'undefined') {
+                if ('aboutContent' in data) {
                     setAboutContent(data.aboutContent);
                 }
                 
-                setLastUpdateKey(data.updateKey);
+                if (data.updateKey) {
+                    setLastUpdateKey(data.updateKey);
+                }
+                
+                // This allows the data source URL to be updated remotely for all users.
+                if (data.updateUrl && typeof data.updateUrl === 'string' && data.updateUrl !== updateUrl) {
+                    console.log(`Switching update URL to: ${data.updateUrl}`);
+                    setUpdateUrl(data.updateUrl);
+                }
             }
         } catch (error) {
             console.error('Error during data fetch:', error);
-            console.warn('Failed to fetch updates, using cached data.');
+            if (recipes.length === 0) { // Only show blocking error on first load fail
+                setLoadError(`فشل في جلب الوصفات. قد يكون رابط التحديث غير صحيح أو هناك مشكلة في الشبكة. (${error.message})`);
+            }
+            console.warn('Failed to fetch updates, using cached data if available.');
         } finally {
             setIsLoading(false);
         }
