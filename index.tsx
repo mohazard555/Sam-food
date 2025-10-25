@@ -81,7 +81,7 @@ const App = () => {
   const [logo, setLogo] = useLocalStorage<string | null>('siteLogo', null);
   const [adminCredentials, setAdminCredentials] = useLocalStorage<AdminCredentials>('adminCredentials', { username: 'admin', password: '12345' });
   const [updateKey, setUpdateKey] = useLocalStorage<string>('updateKey', 'DEFAULT_KEY');
-  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', '');
+  const [updateUrl, setUpdateUrl] = useLocalStorage<string>('updateUrl', 'https://gist.githubusercontent.com/mohazard555/62a7e720fbfbc505880fb03b1afb8a84/raw/');
   const [lastUpdateKey, setLastUpdateKey] = useLocalStorage<string | null>('lastUpdateKey', null);
   const [aboutContent, setAboutContent] = useLocalStorage<string>(
     'aboutContent',
@@ -117,8 +117,9 @@ const App = () => {
             }
             const data = await response.json();
             
-            if (data && data.updateKey && data.updateKey !== lastUpdateKey) {
-                console.log('New update found, applying...');
+            // Apply update if it's the first time (lastUpdateKey is null) OR if the key is new
+            if (data && data.updateKey && (lastUpdateKey === null || data.updateKey !== lastUpdateKey)) {
+                console.log('New or initial data found, applying...');
                 const newRecipes = data.recipes || [];
                 setRecipes(newRecipes);
                 setAds(data.ads || []);
